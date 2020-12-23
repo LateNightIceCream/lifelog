@@ -1,0 +1,7 @@
+document.pdf
+*.aux
+logfile.tex
+*.log
+.auctex-auto
+logIt
+datefile.txt
