@@ -27,7 +27,7 @@ int main () {
 
     // compile Latex w/ shell command
     int status = system(LATEX_COMPILE_CMD);
-    printf("\nDone!\n, %d\n", status);
+    printf("Done!, %d\n", status);
 
     return 0;
 }

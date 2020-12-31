@@ -1,6 +1,7 @@
 document.pdf
 *.aux
 logfile.tex
+logfile*
 *.log
 .auctex-auto
 logIt

@@ -14,7 +14,7 @@
 
 #define LOGFILE_PATH      "./logfile.tex"
 #define DATEFILE_PATH     "./datefile.txt"
-#define LATEX_COMPILE_CMD "xelatex document.tex"
+#define LATEX_COMPILE_CMD "xelatex document.tex >/dev/null "
 
 #define DATE_LENGTH 10 // 10.10.1010
 
