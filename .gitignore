@@ -5,3 +5,4 @@ logfile.tex
 .auctex-auto
 logIt
 datefile.txt
+*.out

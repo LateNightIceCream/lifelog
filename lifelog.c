@@ -1,50 +1,232 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <time.h>
+#include "lifelog.h"
 
-#define LOGFILE_PATH "./logfile.tex"
-#define DATEFILE_PATH "./datefile.txt"
-#define LATEX_COMPILE_CMD "xelatex document.tex"
 
-#define DATE_LENGTH 10 // 10.10.1010
+int main () {
 
-char* inputString (FILE* fp) {
+    setlocale(LC_ALL, "");
 
-    #define CHUNK_SIZE 16
+    struct mainMenu* menu = malloc(sizeof(struct mainMenu));
 
-    char*  string;
-    int    character;
-    size_t stringLength = 0;
-    size_t bufferSize   = CHUNK_SIZE;
+    ncursesInitialize(menu);
 
-    string = malloc(bufferSize * sizeof(char)); // start size
+    while (getKeyAndEvaluate(menu->form) != 0);
 
-    if(string == NULL) return string;
+    // file stuff
+    FILE* logfile = fopen(LOGFILE_PATH, "a");
 
-    while((character = fgetc(fp)) != EOF && character != '\n') {
+    dateTimeHeading(logfile, DATEFILE_PATH);
 
-        string[stringLength] = character;
-        stringLength++;
+    // get user input
+    form_driver(menu->form, REQ_VALIDATION);
 
-        if(stringLength == bufferSize){
+    writeToCurrentEntry(logfile, trim_whitespaces(field_buffer(menu->fields[0], 0)));
 
-            bufferSize += CHUNK_SIZE;
+    fclose(logfile);
 
-            string = realloc(string, bufferSize * sizeof(char));
+    ncursesTerminate(menu);
 
-            if(string == NULL) return string;
-        }
+    // compile Latex w/ shell command
+    int status = system(LATEX_COMPILE_CMD);
+    printf("\nDone!\n, %d\n", status);
+
+    return 0;
+}
+
+
+// sets up ncurses and the main structure
+int ncursesInitialize(struct mainMenu* menu) {
+
+    int nrows, ncols;
+    int formWidth, formHeight, formX, formY;
+
+    WINDOW* ui = initscr();
+    if (ui == NULL) return -1;
+
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+    start_color();
+    use_default_colors();
+
+    getmaxyx(stdscr, nrows, ncols);
+
+    formWidth  = ncols * 0.618;
+    formHeight = nrows * 0.618;
+
+    formX = (ncols - formWidth)  / 2;
+    formY = (nrows - formHeight) / 2;
+
+    menu->fields[0] = new_field(formHeight, formWidth, formY, formX, 0, 0);
+    menu->fields[1] = NULL;
+
+    //init_pair(1, COLOR_BRIGHT_YELLOW, COLOR_BLACK);
+    //set_field_fore(field[0], COLOR_PAIR(1));
+
+    set_field_back(menu->fields[0], A_UNDERLINE);
+    field_opts_off(menu->fields[0], O_AUTOSKIP | O_STATIC); // O_STATIC - Variable size
+    field_opts_on(menu->fields[0], O_EDIT);
+
+    set_max_field(menu->fields[0], MAX_GROWTH);
+
+    menu->form = new_form(menu->fields);
+    post_form(menu->form);
+
+    printw("Enter your lifelog entry");
+
+    refresh();
+
+    return 0;
+
+}
+
+void ncursesTerminate (struct mainMenu* menu) {
+
+    unpost_form(menu->form);
+    free_form(menu->form);
+    free_field(menu->fields[0]);
+    free(menu);
+
+    endwin();
+}
+
+char* trim_whitespaces(char *str)
+{
+	char *end;
+
+	// trim leading space
+	while(isspace(*str))
+		str++;
+
+	if(*str == 0) // all spaces?
+		return str;
+
+	// trim trailing space
+	end = str + strnlen(str, 128) - 1;
+
+	while(end > str && isspace(*end))
+		end--;
+
+	// write new null terminator
+	*(end+1) = '\0';
+
+	return str;
+}
+
+// ncurses key handler
+int getKeyAndEvaluate (FORM* form) {
+
+    int ch = getch();
+
+    switch(ch) {
+
+        // regular key
+        default:
+            form_driver(form, ch);
+            return 1;
+
+         case KEY_DOWN:
+            form_driver(form, REQ_NEXT_LINE);
+            return 1;
+
+        case KEY_UP:
+            form_driver(form, REQ_PREV_LINE);
+           	return 1;
+
+        case KEY_LEFT:
+            form_driver(form, REQ_PREV_CHAR);
+            return 1;
+
+        case KEY_RIGHT:
+            form_driver(form, REQ_NEXT_CHAR);
+            return 1;
+
+        // Delete the char before cursor
+        case KEY_BACKSPACE:
+        case 127:
+            form_driver(form, REQ_DEL_PREV);
+            return 1;
+
+        // Delete the char under the cursor
+        case KEY_DC:
+            form_driver(form, REQ_DEL_CHAR);
+            return 1;
+
+        case KEY_HOME:
+            form_driver(form, REQ_BEG_LINE);
+            return 1;
+
+        case KEY_END:
+            form_driver(form, REQ_END_LINE);
+            return 1;
+
+        // exit
+        case KEY_ENTER:
+        case 10:
+            return 0;
     }
 
-    string[stringLength] = '\0';
-
-    stringLength++;
-
-    // restrain size to actual length of string
-    return realloc(string, stringLength * sizeof(char));
 }
+
+// Time / date
+
+
+// checks the date file and compares with current date
+// if different, put a new heading inside the logfile
+void dateTimeHeading (FILE* logfile, char* datefilepath) {
+
+    FILE* datefile;
+
+    char currentDate[DATE_LENGTH] = {};
+    char prevDate[DATE_LENGTH]    = {};
+
+    getCurrentDate(currentDate);
+    getPrevDateFromFile(datefilepath, prevDate);
+
+    if(strncmp(currentDate, prevDate, DATE_LENGTH) != 0) {
+
+        // new heading
+        writeNewEntry(logfile, currentDate);
+
+        // update previous Date
+        writeDateToFile(datefilepath, currentDate);
+
+        printf("\nAdded a new entry on %s!\n", currentDate);
+    }
+
+}
+
+void getCurrentDate (char* datebuf) {
+
+    time_t t     = time(NULL);
+    struct tm tm = *localtime(&t);
+
+    sprintf(
+        datebuf,
+        "%d.%d.%d",
+        tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900
+    );
+
+}
+
+void getPrevDateFromFile (char* filepath, char* datebuf) { // maybe don't call by reference?
+
+    FILE* datefile = fopen(filepath, "r+");
+
+    fread(datebuf, DATE_LENGTH, sizeof(char), datefile);
+
+    fclose(datefile);
+}
+
+void writeDateToFile (char* filepath, char* date) {
+
+    FILE* datefile = fopen(filepath, "w");
+
+    fseek(datefile, 0, SEEK_SET); //neccessary?
+
+    fprintf(datefile, "%s", date);
+}
+
+// File operations
 
 void writeNewEntry (FILE* file, char* date) {
     fprintf(
@@ -54,57 +236,11 @@ void writeNewEntry (FILE* file, char* date) {
     );
 }
 
-void writeToCurrentEntry (FILE* file) {
+void writeToCurrentEntry (FILE* file, char* str) {
+
     fprintf(
         file,
-        "\\entryItem{%s\\\\}\n",
-        inputString(stdin)
+        "\n\\entryItem{%s\\\\}\n",
+        str
     );
-}
-
-
-int main () {
-
-    FILE* logfile;
-    FILE* datefile;
-
-    char prevDate[DATE_LENGTH] = {};
-    char currentDate[DATE_LENGTH] = {};
-
-    time_t t     = time(NULL);
-    struct tm tm = *localtime(&t);
-
-    sprintf(
-        currentDate,
-        "%d.%d.%d",
-        tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900
-    );
-
-    logfile  = fopen(LOGFILE_PATH,  "a");
-    datefile = fopen(DATEFILE_PATH, "r+");
-
-    fread(prevDate, DATE_LENGTH, sizeof(char), datefile);
-
-    if(strncmp(currentDate, prevDate, DATE_LENGTH) != 0) {
-
-        writeNewEntry(logfile, currentDate);
-
-        fseek(datefile, 0, SEEK_SET);
-        fprintf(datefile, "%s", currentDate);
-
-        printf("\nAdded a new entry on %s!\n", currentDate);
-    }
-
-    printf("\nWhat do you want to write?\n");
-    writeToCurrentEntry(logfile);
-
-    fclose(datefile);
-    fclose(logfile);
-
-    // compile Latex w/ shell command
-    int status = system(LATEX_COMPILE_CMD);
-
-    printf("\nDone!\n, %d", status);
-
-    return 0;
 }
