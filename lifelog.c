@@ -26,8 +26,8 @@ int main () {
     ncursesTerminate(menu);
 
     // compile Latex w/ shell command
-    int status = system(LATEX_COMPILE_CMD);
-    printf("Done!, %d\n", status);
+    //int status = system(LATEX_COMPILE_CMD);
+    //printf("Done!, %d\n", status);
 
     return 0;
 }
@@ -71,7 +71,13 @@ int ncursesInitialize(struct mainMenu* menu) {
     menu->form = new_form(menu->fields);
     post_form(menu->form);
 
-    printw("Enter your lifelog entry");
+
+    char currentDate[DATE_LENGTH] = {};
+    getCurrentDate(currentDate);
+
+    mvprintw(formY + formHeight, formX + formWidth - DATE_LENGTH, "%s", currentDate);
+
+    mvprintw(formY, formX, "Enter your lifelog entry");
 
     refresh();
 
