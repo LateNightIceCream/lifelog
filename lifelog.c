@@ -97,7 +97,7 @@ void ncursesTerminate (struct mainMenu* menu) {
 
 char* trim_whitespaces(char *str)
 {
-	char *end;
+	char* end;
 
 	// trim leading space
 	while(isspace(*str))
@@ -107,7 +107,7 @@ char* trim_whitespaces(char *str)
 		return str;
 
 	// trim trailing space
-	end = str + strnlen(str, 128) - 1;
+	end = str + strlen(str) - 1;
 
 	while(end > str && isspace(*end))
 		end--;
